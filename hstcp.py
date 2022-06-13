@@ -1,4 +1,5 @@
 import numpy as np
+import random
 import matplotlib.pyplot as plt
 
 class hstcpNetwork:
@@ -6,12 +7,16 @@ class hstcpNetwork:
     LWhs = 31 #Low-window threshold
     Rhs = 0.1 #Decrease congestion window after loss above LWhs
     cwnd = 70000 #Congestion window
-    sst = 10
+    sst = 10 #Slow start threshold
     cwndInit = 0 #Congestion window initial value
+    timeout = 300
 
     #Constructor function:
-    def __init__(self, cwndInit):
-        self.cwndInit = cwndInit
+    def __init__(self, cwndInit, sst, timeout):
+        self.cwnd = cwndInit
+        self. cwndInit = cwndInit
+        self.sst = sst
+        self.timeout = timeout
 
     #Assist functions for the increase or decrease operations:
     def alphaIncrease(self, cwnd):
@@ -40,16 +45,72 @@ class hstcpNetwork:
 
         self.cwnd = self.cwndInit
 
-#TODO: Simulate exchange of packages:
+    #Function for congestion window increase when cwnd is under the slow start threshold
+    def sstIncrease(self):
+        self.cwnd = self.cwnd + self.cwnd
 
-increaseArray = []
-test = hstcpNetwork()
+def threeWayHandshake(transmissionRounds):
+    serverSideTCP = hstcpNetwork(30, 30, 300)
+    roundsCounter = 0
+    connectionIdleTimeout = 0
+    cwndData = []
+    unACKData = []
 
-while test.cwnd >= 1:
-    print(test.cwnd)
-    increaseArray.append(test.cwnd)
-    test.DecreaseProcedures()
+    cwndData.append(serverSideTCP.cwnd)
 
-plt.plot(increaseArray)
-plt.ylabel('some numbers')
-plt.show()
+    file = open("hstcp_history.txt", "w")
+    file.write("-----INITIAL DATA----\n")
+    file.write("High Window Threshold: " + str(serverSideTCP.HWhs) + " Low Window Threshold: " + str(serverSideTCP.LWhs) + " RHs: " + str(serverSideTCP.Rhs) + "\n")
+    file.write("Congestion Window Initial value: " + str(serverSideTCP.cwndInit) + " Slow Start Threshold: " + str(serverSideTCP.sst))
+    file.write("\n---------------")
+
+    while roundsCounter <= transmissionRounds:
+        file.write("\nRound: " + str(roundsCounter) + " cwnd: " + str(serverSideTCP.cwnd) + " sst: " + str(serverSideTCP.sst))
+    
+        ack = False
+        unACKprob = (serverSideTCP.cwnd * 100) / (serverSideTCP.HWhs + 1)
+        connectionIdleTimeout = random.randrange(1, 302)
+        
+        chanceCalc = random.randrange(0, 101)
+        if unACKprob <= chanceCalc:
+            ack = True
+        else:
+            ack = False
+
+        if connectionIdleTimeout > serverSideTCP.timeout:
+            serverSideTCP.TimeoutProcedures()
+            file.write("\nNetwork feedback: TIMEOUT")
+        elif ack == False:
+            serverSideTCP.DecreaseProcedures()
+            unACKData.append(roundsCounter)
+            file.write("\nNetwork feedback: unACK")
+            #print("UnACK", unACKprob, " ", chanceCalc)
+        elif ack and serverSideTCP.cwnd < serverSideTCP.sst:
+            serverSideTCP.sstIncrease()
+            file.write("\nNetwork feedback: ACK (SST)")
+            #print("SST INCREASE")
+        elif ack:
+            serverSideTCP.IncreaseProcedures()
+            file.write("\nNetwork feedback: ACK")
+            #print("hs increase")
+
+        cwndData.append(serverSideTCP.cwnd)
+        roundsCounter += 1
+
+    file.close()
+
+    #Data presentation
+    print("done")  
+    plt.plot(cwndData, "#0ad2f5")
+
+    ax = plt.subplot(111)
+    ax.spines.right.set_visible(False)
+    ax.spines.top.set_visible(False)
+    plt.ylabel('Congestion Window \n(CWND)')
+    plt.xlabel('Transmission round')
+    plt.grid(axis='y')
+    #plt.show()
+    plt.savefig('hstcp_history_graph.png')
+
+
+threeWayHandshake(7500)
